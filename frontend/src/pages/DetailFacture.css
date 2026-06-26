@@ -1,0 +1,123 @@
+.detail-facture { display: flex; flex-direction: column; gap: 20px; }
+
+.action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.print-container {
+  background: white;
+  border-radius: var(--radius);
+  padding: 32px;
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-md);
+  max-width: 860px;
+}
+
+.print-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid var(--navy);
+}
+
+.company-name {
+  font-family: 'Cairo', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--navy);
+}
+
+.company-sub { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+
+.facture-title { text-align: right; }
+
+.facture-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.facture-date { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+
+.statut-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge-green { background: #d1fae5; color: #065f46; }
+.badge-orange { background: #fef3c7; color: #92400e; }
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.info-box {
+  background: var(--gray-50);
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+}
+
+.info-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.info-value { font-size: 14px; font-weight: 600; }
+
+.total-section {
+  background: var(--navy-dark);
+  color: white;
+  padding: 16px 20px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total-label { font-size: 13px; opacity: 0.8; }
+
+.total-amount {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--gold-light);
+  font-family: 'Cairo', sans-serif;
+}
+
+.prime-row {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  margin-top: 4px;
+}
+
+.footer {
+  margin-top: 32px;
+  border-top: 1px solid var(--gray-200);
+  padding-top: 16px;
+  font-size: 12px;
+  color: var(--gray-500);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .print-container { padding: 16px; }
+  .print-header { flex-direction: column; gap: 12px; }
+  .facture-title { text-align: left; }
+  .info-grid { grid-template-columns: 1fr; }
+}
