@@ -40,5 +40,38 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
+// Endpoint temporaire pour initialiser les mots de passe
+router.get('/setup-passwords', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    
+    const hash_tct2024     = await bcrypt.hash('tct2024', 10);
+    const hash_chauffeur1  = await bcrypt.hash('chauffeur1', 10);
+    const hash_chauffeur2  = await bcrypt.hash('chauffeur2', 10);
 
+    await db.query(
+      'UPDATE users SET mot_de_passe=$1 WHERE email=$2',
+      [hash_tct2024, 'abdelaali@tct.ma']
+    );
+    await db.query(
+      'UPDATE users SET mot_de_passe=$1 WHERE email=$2',
+      [hash_chauffeur1, 'chauffeur1@tct.ma']
+    );
+    await db.query(
+      'UPDATE users SET mot_de_passe=$1 WHERE email=$2',
+      [hash_chauffeur2, 'chauffeur2@tct.ma']
+    );
+
+    res.json({ 
+      message: 'Mots de passe initialisés !',
+      comptes: [
+        { email: 'abdelaali@tct.ma',  mdp: 'tct2024' },
+        { email: 'chauffeur1@tct.ma', mdp: 'chauffeur1' },
+        { email: 'chauffeur2@tct.ma', mdp: 'chauffeur2' }
+      ]
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;
