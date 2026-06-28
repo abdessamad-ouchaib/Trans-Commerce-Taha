@@ -2,7 +2,6 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const db = require('../db');
 
-// Helper: generate facture number
 async function genNumero() {
   const year = new Date().getFullYear();
   const { rows } = await db.query(
@@ -13,7 +12,7 @@ async function genNumero() {
   return `TCT-${year}-${String(num).padStart(4, '0')}`;
 }
 
-// GET all factures with filters
+// GET all factures
 router.get('/', auth, async (req, res) => {
   try {
     const { statut, limit = 100, page = 1 } = req.query;
@@ -34,12 +33,10 @@ router.get('/', auth, async (req, res) => {
       LIMIT $${paramOffset + 1} OFFSET $${paramOffset + 2}
     `;
     const { rows: factures } = await db.query(sql, params);
-
     const { rows: countRows } = await db.query(
       `SELECT COUNT(*) AS total FROM factures ${statut ? "WHERE statut=$1" : ''}`,
       statut ? [statut] : []
     );
-
     res.json({ factures, total: parseInt(countRows[0].total), pages: Math.ceil(countRows[0].total / limit) });
   } catch (err) { console.error(err); res.status(500).json({ message: err.message }); }
 });
@@ -49,10 +46,10 @@ router.get('/stats', auth, async (req, res) => {
   try {
     const { rows: [stats] } = await db.query(`
       SELECT
-        COUNT(*)                                             AS total_factures,
-        COUNT(*) FILTER (WHERE statut='Payée')              AS payees,
-        COUNT(*) FILTER (WHERE statut='En attente')         AS en_attente,
-        COALESCE(SUM(montant_total) FILTER (WHERE statut='Payée'),    0) AS montant_paye,
+        COUNT(*)                                              AS total_factures,
+        COUNT(*) FILTER (WHERE statut='Payée')               AS payees,
+        COUNT(*) FILTER (WHERE statut='En attente')          AS en_attente,
+        COALESCE(SUM(montant_total) FILTER (WHERE statut='Payée'),     0) AS montant_paye,
         COALESCE(SUM(montant_total) FILTER (WHERE statut='En attente'),0) AS montant_attente
       FROM factures
     `);
@@ -60,7 +57,7 @@ router.get('/stats', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// GET single facture with lignes
+// GET single facture
 router.get('/:id', auth, async (req, res) => {
   try {
     const { rows: [facture] } = await db.query(`
@@ -72,9 +69,7 @@ router.get('/:id', auth, async (req, res) => {
       LEFT JOIN employes e ON f.chauffeur_id = e.id
       WHERE f.id = $1
     `, [req.params.id]);
-
     if (!facture) return res.status(404).json({ message: 'Facture non trouvée.' });
-
     const { rows: lignes } = await db.query(`
       SELECT lf.*, p.societe, p.poids, p.type_sac, p.point_chargement
       FROM lignes_facture lf
@@ -82,7 +77,6 @@ router.get('/:id', auth, async (req, res) => {
       WHERE lf.facture_id = $1
       ORDER BY lf.id
     `, [req.params.id]);
-
     res.json({ ...facture, lignes });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -99,12 +93,45 @@ router.post('/', auth, async (req, res) => {
       statut, date_facture, notes, lignes = []
     } = req.body;
 
+    // ✅ VALIDATION — vérifier qu'il y a au moins un produit
+    if (!client_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Veuillez sélectionner un client.' });
+    }
+    if (!chauffeur_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Veuillez sélectionner un chauffeur.' });
+    }
+    if (!lignes || lignes.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Veuillez ajouter au moins un produit à la facture.' });
+    }
+
+    // ✅ VALIDATION — nettoyer et valider chaque ligne
+    const lignesValides = lignes.map(l => ({
+      produit_id:    l.produit_id || null,
+      nom_produit:   l.nom_produit || '',
+      quantite_sacs: parseInt(l.quantite_sacs) || 1,
+      prix_unitaire: parseFloat(l.prix_unitaire) || 0
+    }));
+
+    for (const l of lignesValides) {
+      if (!l.produit_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Veuillez sélectionner un produit pour chaque ligne.' });
+      }
+      if (l.quantite_sacs < 1) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La quantité doit être au moins 1 sac.' });
+      }
+    }
+
     // Fetch client & chauffeur names
-    const { rows: [cli] } = await client.query('SELECT nom, ville FROM clients WHERE id=$1', [client_id]);
+    const { rows: [cli] }  = await client.query('SELECT nom, ville FROM clients WHERE id=$1', [client_id]);
     const { rows: [chauf] } = await client.query('SELECT prenom, nom, matricule_camion FROM employes WHERE id=$1', [chauffeur_id]);
 
     const numero = await genNumero();
-    const montant_total = lignes.reduce((s, l) => s + (l.quantite_sacs * l.prix_unitaire), 0);
+    const montant_total = lignesValides.reduce((s, l) => s + (l.quantite_sacs * l.prix_unitaire), 0);
 
     const { rows: [facture] } = await client.query(`
       INSERT INTO factures
@@ -116,36 +143,55 @@ router.post('/', auth, async (req, res) => {
       RETURNING *
     `, [
       numero,
-      client_id, cli?.nom || '', cli?.ville || '',
-      chauffeur_id, chauf ? `${chauf.prenom} ${chauf.nom}` : '',
+      client_id,
+      cli?.nom   || '',
+      cli?.ville || '',
+      chauffeur_id,
+      chauf ? `${chauf.prenom} ${chauf.nom}` : '',
       matricule_camion || chauf?.matricule_camion || '',
       montant_total,
-      mode_paiement || 'Espèces',
-      numero_cheque || null,
-      prime_chauffeur || 0,
-      statut || 'En attente',
-      date_facture || new Date().toISOString().split('T')[0],
-      notes || null
+      mode_paiement    || 'Espèces',
+      numero_cheque    || null,
+      parseFloat(prime_chauffeur) || 0,
+      statut           || 'En attente',
+      date_facture     || new Date().toISOString().split('T')[0],
+      notes            || null
     ]);
 
     // Insert lignes
-    for (const l of lignes) {
-      const { rows: [prod] } = await client.query('SELECT nom, poids, type_sac FROM produits WHERE id=$1', [l.produit_id]);
+    for (const l of lignesValides) {
+      const { rows: [prod] } = await client.query(
+        'SELECT nom, poids, type_sac FROM produits WHERE id=$1', [l.produit_id]
+      );
+      const nom_produit = prod
+        ? `${prod.nom} ${prod.poids} ${prod.type_sac}`
+        : l.nom_produit;
+
       await client.query(`
-        INSERT INTO lignes_facture (facture_id, produit_id, nom_produit, quantite_sacs, prix_unitaire)
+        INSERT INTO lignes_facture
+          (facture_id, produit_id, nom_produit, quantite_sacs, prix_unitaire)
         VALUES ($1,$2,$3,$4,$5)
-      `, [facture.id, l.produit_id,
-          prod ? `${prod.nom} ${prod.poids} ${prod.type_sac}` : l.nom_produit,
-          l.quantite_sacs, l.prix_unitaire]);
+      `, [
+        facture.id,
+        l.produit_id,
+        nom_produit,
+        l.quantite_sacs,
+        l.prix_unitaire
+      ]);
     }
 
     await client.query('COMMIT');
 
     const { rows: lignesResult } = await db.query(
-      'SELECT lf.*, p.societe FROM lignes_facture lf LEFT JOIN produits p ON lf.produit_id=p.id WHERE lf.facture_id=$1',
+      `SELECT lf.*, p.societe
+       FROM lignes_facture lf
+       LEFT JOIN produits p ON lf.produit_id = p.id
+       WHERE lf.facture_id = $1`,
       [facture.id]
     );
+
     res.status(201).json({ ...facture, lignes: lignesResult });
+
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -170,15 +216,14 @@ router.put('/:id', auth, async (req, res) => {
     const updates = [];
     const vals = [];
     let i = 1;
-
     const addField = (col, val) => { updates.push(`${col}=$${i++}`); vals.push(val); };
 
-    if (statut !== undefined)          addField('statut', statut);
-    if (mode_paiement !== undefined)   addField('mode_paiement', mode_paiement);
-    if (numero_cheque !== undefined)   addField('numero_cheque', numero_cheque);
-    if (prime_chauffeur !== undefined) addField('prime_chauffeur', prime_chauffeur);
-    if (date_facture !== undefined)    addField('date_facture', date_facture);
-    if (notes !== undefined)           addField('notes', notes);
+    if (statut           !== undefined) addField('statut', statut);
+    if (mode_paiement    !== undefined) addField('mode_paiement', mode_paiement);
+    if (numero_cheque    !== undefined) addField('numero_cheque', numero_cheque);
+    if (prime_chauffeur  !== undefined) addField('prime_chauffeur', parseFloat(prime_chauffeur) || 0);
+    if (date_facture     !== undefined) addField('date_facture', date_facture);
+    if (notes            !== undefined) addField('notes', notes);
     if (matricule_camion !== undefined) addField('matricule_camion', matricule_camion);
 
     if (client_id !== undefined) {
@@ -192,15 +237,24 @@ router.put('/:id', auth, async (req, res) => {
       if (chauf) addField('nom_chauffeur', `${chauf.prenom} ${chauf.nom}`);
     }
 
-    // Recalculate total if lignes provided
-    if (lignes) {
-      const montant_total = lignes.reduce((s, l) => s + (l.quantite_sacs * l.prix_unitaire), 0);
+    if (lignes && lignes.length > 0) {
+      const lignesValides = lignes.map(l => ({
+        produit_id:    l.produit_id || null,
+        nom_produit:   l.nom_produit || '',
+        quantite_sacs: parseInt(l.quantite_sacs) || 1,
+        prix_unitaire: parseFloat(l.prix_unitaire) || 0
+      }));
+      const montant_total = lignesValides.reduce((s, l) => s + (l.quantite_sacs * l.prix_unitaire), 0);
       addField('montant_total', montant_total);
       await conn.query('DELETE FROM lignes_facture WHERE facture_id=$1', [req.params.id]);
-      for (const l of lignes) {
-        const { rows: [prod] } = await conn.query('SELECT nom, poids, type_sac FROM produits WHERE id=$1', [l.produit_id]);
+      for (const l of lignesValides) {
+        const { rows: [prod] } = await conn.query(
+          'SELECT nom, poids, type_sac FROM produits WHERE id=$1', [l.produit_id]
+        );
         await conn.query(
-          'INSERT INTO lignes_facture (facture_id, produit_id, nom_produit, quantite_sacs, prix_unitaire) VALUES ($1,$2,$3,$4,$5)',
+          `INSERT INTO lignes_facture
+             (facture_id, produit_id, nom_produit, quantite_sacs, prix_unitaire)
+           VALUES ($1,$2,$3,$4,$5)`,
           [req.params.id, l.produit_id,
            prod ? `${prod.nom} ${prod.poids} ${prod.type_sac}` : l.nom_produit,
            l.quantite_sacs, l.prix_unitaire]
@@ -217,9 +271,19 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     await conn.query('COMMIT');
-    const { rows: [updated] } = await db.query('SELECT * FROM factures WHERE id=$1', [req.params.id]);
-    const { rows: lignesResult } = await db.query('SELECT lf.*, p.societe FROM lignes_facture lf LEFT JOIN produits p ON lf.produit_id=p.id WHERE lf.facture_id=$1', [req.params.id]);
+
+    const { rows: [updated] } = await db.query(
+      'SELECT * FROM factures WHERE id=$1', [req.params.id]
+    );
+    const { rows: lignesResult } = await db.query(
+      `SELECT lf.*, p.societe
+       FROM lignes_facture lf
+       LEFT JOIN produits p ON lf.produit_id = p.id
+       WHERE lf.facture_id = $1`,
+      [req.params.id]
+    );
     res.json({ ...updated, lignes: lignesResult });
+
   } catch (err) {
     await conn.query('ROLLBACK');
     res.status(400).json({ message: err.message });
