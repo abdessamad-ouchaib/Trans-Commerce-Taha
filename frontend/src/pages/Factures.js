@@ -27,28 +27,39 @@ export default function Factures() {
   useEffect(() => { fetchFactures(); }, [filtre]);
 
   const filtered = factures.filter(f =>
-    !search || f.numeroFacture?.toLowerCase().includes(search.toLowerCase()) ||
-    f.nomClient?.toLowerCase().includes(search.toLowerCase()) ||
-    f.villeClient?.toLowerCase().includes(search.toLowerCase()) ||
-    f.nomChauffeur?.toLowerCase().includes(search.toLowerCase())
+    !search ||
+    (f.numero_facture  || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.nom_client      || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.ville_client    || '').toLowerCase().includes(search.toLowerCase()) ||
+    (f.nom_chauffeur   || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const formatMAD = (n) => `${Number(n || 0).toLocaleString('fr-MA')} MAD`;
 
-  const totalFiltre = filtered.reduce((s, f) => s + (f.montantTotal || 0), 0);
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('fr-MA');
+  };
+
+  const totalFiltre = filtered.reduce((s, f) => s + Number(f.montant_total || 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Factures</h1>
-          <p className="page-subtitle">{filtered.length} facture(s) · Total: {formatMAD(totalFiltre)}</p>
+          <p className="page-subtitle">
+            {filtered.length} facture(s) · Total: {formatMAD(totalFiltre)}
+          </p>
         </div>
         <button className="btn-gold" onClick={() => navigate('/factures/nouvelle')}>
           + Nouvelle facture
         </button>
       </div>
 
+      {/* Filtres */}
       <div className="card">
         <div className="card-body" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <input
@@ -59,7 +70,12 @@ export default function Factures() {
             onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, minWidth: '200px' }}
           />
-          <select className="form-control" value={filtre} onChange={e => setFiltre(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
+          <select
+            className="form-control"
+            value={filtre}
+            onChange={e => setFiltre(e.target.value)}
+            style={{ width: 'auto', minWidth: '180px' }}
+          >
             <option value="">Toutes les factures</option>
             <option value="En attente">En attente</option>
             <option value="Payée">Payées</option>
@@ -67,6 +83,7 @@ export default function Factures() {
         </div>
       </div>
 
+      {/* Tableau */}
       <div className="card">
         <div className="table-wrapper">
           {loading ? (
@@ -97,21 +114,30 @@ export default function Factures() {
               </thead>
               <tbody>
                 {filtered.map(f => (
-                  <tr key={f._id}>
+                  <tr key={f.id}>
                     <td>
-                      <button className="link-btn" onClick={() => navigate(`/factures/${f._id}`)}>
-                        <strong>{f.numeroFacture}</strong>
+                      <button
+                        className="link-btn"
+                        onClick={() => navigate(`/factures/${f.id}`)}
+                      >
+                        <strong>{f.numero_facture || '—'}</strong>
                       </button>
                     </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{new Date(f.dateFacture).toLocaleDateString('fr-MA')}</td>
-                    <td>{f.nomClient}</td>
-                    <td>{f.villeClient}</td>
-                    <td>{f.nomChauffeur}</td>
-                    <td><code style={{ fontSize: '12px' }}>{f.matriculeCamion}</code></td>
-                    <td><strong>{formatMAD(f.montantTotal)}</strong></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {formatDate(f.date_facture)}
+                    </td>
+                    <td>{f.nom_client || '—'}</td>
+                    <td>{f.ville_client || '—'}</td>
+                    <td>{f.nom_chauffeur || '—'}</td>
                     <td>
-                      <span className={`badge ${f.modePaiement === 'Chèque' ? 'badge-blue' : 'badge-green'}`}>
-                        {f.modePaiement}
+                      {f.matricule_camion
+                        ? <code style={{ fontSize: '12px' }}>{f.matricule_camion}</code>
+                        : '—'}
+                    </td>
+                    <td><strong>{formatMAD(f.montant_total)}</strong></td>
+                    <td>
+                      <span className={`badge ${f.mode_paiement === 'Chèque' ? 'badge-blue' : 'badge-green'}`}>
+                        {f.mode_paiement || '—'}
                       </span>
                     </td>
                     <td>
@@ -121,10 +147,16 @@ export default function Factures() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn-secondary btn-sm" onClick={() => navigate(`/factures/${f._id}`)}>
+                        <button
+                          className="btn-secondary btn-sm"
+                          onClick={() => navigate(`/factures/${f.id}`)}
+                        >
                           Voir
                         </button>
-                        <button className="btn-secondary btn-sm" onClick={() => navigate(`/factures/${f._id}/modifier`)}>
+                        <button
+                          className="btn-secondary btn-sm"
+                          onClick={() => navigate(`/factures/${f.id}/modifier`)}
+                        >
                           ✏️
                         </button>
                       </div>
