@@ -29,6 +29,13 @@ export default function Dashboard() {
 
   const formatMAD = (n) => `${Number(n || 0).toLocaleString('fr-MA')} MAD`;
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('fr-MA');
+  };
+
   if (loading) return <div className="loading-spinner">Chargement...</div>;
 
   return (
@@ -43,12 +50,12 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon stat-blue">📄</div>
           <div className="stat-info">
-            <span className="stat-value">{stats?.totalFactures || 0}</span>
+            <span className="stat-value">{stats?.total_factures || 0}</span>
             <span className="stat-label">Total Factures</span>
           </div>
         </div>
@@ -62,32 +69,36 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="stat-icon stat-orange">⏳</div>
           <div className="stat-info">
-            <span className="stat-value">{stats?.enAttente || 0}</span>
+            <span className="stat-value">{stats?.en_attente || 0}</span>
             <span className="stat-label">En Attente</span>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon stat-gold">💰</div>
           <div className="stat-info">
-            <span className="stat-value stat-value-sm">{formatMAD(stats?.montantAttente)}</span>
+            <span className="stat-value stat-value-sm">{formatMAD(stats?.montant_attente)}</span>
             <span className="stat-label">Montant en Attente</span>
           </div>
         </div>
       </div>
 
-      {/* Quick actions */}
+      {/* Actions rapides */}
       <div className="quick-actions card">
         <div className="card-header">
           <h2 className="card-title">Actions rapides</h2>
         </div>
         <div className="card-body quick-grid">
           {[
-            { icon: '📄', label: 'Nouvelle facture', to: '/factures/nouvelle', color: 'navy' },
-            { icon: '👥', label: 'Ajouter un client', to: '/clients', color: 'blue' },
-            { icon: '🌾', label: 'Gérer les produits', to: '/produits', color: 'green' },
-            { icon: '👤', label: 'Gérer les employés', to: '/employes', color: 'gold' },
+            { icon: '📄', label: 'Nouvelle facture',   to: '/factures/nouvelle', color: 'navy'  },
+            { icon: '👥', label: 'Ajouter un client',  to: '/clients',           color: 'blue'  },
+            { icon: '🌾', label: 'Gérer les produits', to: '/produits',          color: 'green' },
+            { icon: '👤', label: 'Gérer les employés', to: '/employes',          color: 'gold'  },
           ].map(a => (
-            <button key={a.to} className={`quick-btn quick-${a.color}`} onClick={() => navigate(a.to)}>
+            <button
+              key={a.to}
+              className={`quick-btn quick-${a.color}`}
+              onClick={() => navigate(a.to)}
+            >
               <span className="quick-icon">{a.icon}</span>
               <span>{a.label}</span>
             </button>
@@ -95,7 +106,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent factures */}
+      {/* Factures récentes */}
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">Factures récentes</h2>
@@ -126,18 +137,26 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {recentFactures.map(f => (
-                  <tr key={f._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/factures/${f._id}`)}>
-                    <td><strong className="text-navy">{f.numeroFacture}</strong></td>
-                    <td>{f.nomClient}</td>
-                    <td>{f.villeClient}</td>
-                    <td>{f.nomChauffeur}</td>
-                    <td><strong>{formatMAD(f.montantTotal)}</strong></td>
+                  <tr
+                    key={f.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/factures/${f.id}`)}
+                  >
+                    <td>
+                      <strong className="text-navy">
+                        {f.numero_facture || '—'}
+                      </strong>
+                    </td>
+                    <td>{f.nom_client    || '—'}</td>
+                    <td>{f.ville_client  || '—'}</td>
+                    <td>{f.nom_chauffeur || '—'}</td>
+                    <td><strong>{formatMAD(f.montant_total)}</strong></td>
                     <td>
                       <span className={`badge ${f.statut === 'Payée' ? 'badge-green' : 'badge-orange'}`}>
                         {f.statut}
                       </span>
                     </td>
-                    <td>{new Date(f.dateFacture).toLocaleDateString('fr-MA')}</td>
+                    <td>{formatDate(f.date_facture)}</td>
                   </tr>
                 ))}
               </tbody>
