@@ -11,10 +11,9 @@ export default function DetailFacture() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    API.get(`/factures/${id}`).then(({ data }) => {
-      setFacture(data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    API.get(`/factures/${id}`)
+      .then(({ data }) => { setFacture(data); setLoading(false); })
+      .catch(() => setLoading(false));
   }, [id]);
 
   const handleDelete = async () => {
@@ -34,7 +33,7 @@ export default function DetailFacture() {
     win.document.write(`
       <!DOCTYPE html><html><head>
       <meta charset="UTF-8">
-      <title>Facture ${facture?.numeroFacture}</title>
+      <title>Facture ${facture?.numero_facture}</title>
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -60,7 +59,6 @@ export default function DetailFacture() {
         .badge-green { background: #d1fae5; color: #065f46; }
         .badge-orange { background: #fef3c7; color: #92400e; }
         .footer { margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #64748b; text-align: center; }
-        .prime-row { display: flex; justify-content: space-between; color: rgba(255,255,255,0.7); font-size: 13px; margin-top: 8px; }
       </style>
       </head><body>${content}</body></html>
     `);
@@ -73,16 +71,24 @@ export default function DetailFacture() {
 
   const formatMAD = (n) => `${Number(n || 0).toLocaleString('fr-MA')} MAD`;
 
+  // Formater la date correctement
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('fr-MA', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   return (
     <div className="detail-facture">
-      {/* Action bar */}
+      {/* Barre d'actions */}
       <div className="action-bar no-print">
         <button className="btn-secondary" onClick={() => navigate('/factures')}>← Retour</button>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {facture.statut === 'En attente' ? (
             <button className="btn-gold" onClick={() => handleStatut('Payée')}>✅ Marquer Payée</button>
           ) : (
-            <button className="btn-secondary" onClick={() => handleStatut('En attente')}>⏳ Marquer En attente</button>
+            <button className="btn-secondary" onClick={() => handleStatut('En attente')}>⏳ En attente</button>
           )}
           <button className="btn-primary" onClick={() => navigate(`/factures/${id}/modifier`)}>✏️ Modifier</button>
           <button className="btn-primary" onClick={handlePrint}>🖨️ Imprimer</button>
@@ -90,10 +96,11 @@ export default function DetailFacture() {
         </div>
       </div>
 
-      {/* Printable content */}
+      {/* Contenu imprimable */}
       <div ref={printRef}>
         <div className="print-container">
-          {/* Header */}
+
+          {/* En-tête */}
           <div className="print-header">
             <div>
               <div className="company-name">🚛 Trans Commerce TAHA</div>
@@ -101,8 +108,12 @@ export default function DetailFacture() {
               <div className="company-sub">Tél: 06.61.31.69.57 · RC: 96931 · CNSS: 9541279</div>
             </div>
             <div className="facture-title">
-              <div className="facture-num">FACTURE N° {facture.numeroFacture}</div>
-              <div className="facture-date">Date: {new Date(facture.dateFacture).toLocaleDateString('fr-MA', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              <div className="facture-num">
+                FACTURE N° {facture.numero_facture || '—'}
+              </div>
+              <div className="facture-date">
+                Date: {formatDate(facture.date_facture)}
+              </div>
               <div style={{ marginTop: '8px' }}>
                 <span className={`statut-badge ${facture.statut === 'Payée' ? 'badge-green' : 'badge-orange'}`}>
                   {facture.statut}
@@ -111,27 +122,41 @@ export default function DetailFacture() {
             </div>
           </div>
 
-          {/* Info boxes */}
+          {/* Infos client / chauffeur / paiement */}
           <div className="info-grid">
             <div className="info-box">
               <div className="info-label">👥 Client</div>
-              <div className="info-value">{facture.nomClient || facture.client?.nom}</div>
-              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{facture.villeClient || facture.client?.ville}</div>
-              {facture.client?.telephone && <div style={{ fontSize: '12px', color: '#64748b' }}>{facture.client.telephone}</div>}
+              <div className="info-value">{facture.nom_client || '—'}</div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                {facture.ville_client || ''}
+              </div>
+              {facture.client_telephone && (
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  {facture.client_telephone}
+                </div>
+              )}
             </div>
             <div className="info-box">
               <div className="info-label">🚛 Chauffeur</div>
-              <div className="info-value">{facture.nomChauffeur || `${facture.chauffeur?.prenom} ${facture.chauffeur?.nom}`}</div>
-              {facture.matriculeCamion && <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Camion: {facture.matriculeCamion}</div>}
+              <div className="info-value">{facture.nom_chauffeur || '—'}</div>
+              {facture.matricule_camion && (
+                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                  Camion: {facture.matricule_camion}
+                </div>
+              )}
             </div>
             <div className="info-box">
               <div className="info-label">💰 Paiement</div>
-              <div className="info-value">{facture.modePaiement}</div>
-              {facture.numeroCheque && <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Chèque N°: {facture.numeroCheque}</div>}
+              <div className="info-value">{facture.mode_paiement || '—'}</div>
+              {facture.numero_cheque && (
+                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                  Chèque N°: {facture.numero_cheque}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Products table */}
+          {/* Tableau des produits */}
           <table>
             <thead>
               <tr>
@@ -145,17 +170,19 @@ export default function DetailFacture() {
             </thead>
             <tbody>
               {(facture.lignes || []).map((l, i) => {
-                const prod = l.produit || {};
-                const nomAffiche = l.nomProduit || `${prod.nom || ''} ${prod.poids || ''}`;
-                const total = l.quantiteSacs * l.prixUnitaire;
+                const qte   = Number(l.quantite_sacs  || 0);
+                const prix  = Number(l.prix_unitaire  || 0);
+                const total = Number(l.total_ligne    || qte * prix);
                 return (
                   <tr key={i}>
                     <td>{i + 1}</td>
-                    <td>{nomAffiche}</td>
-                    <td>{prod.poids || ''}</td>
-                    <td style={{ textAlign: 'right' }}>{l.quantiteSacs}</td>
-                    <td style={{ textAlign: 'right' }}>{Number(l.prixUnitaire).toLocaleString('fr-MA')}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{Number(total).toLocaleString('fr-MA')}</td>
+                    <td>{l.nom_produit || '—'}</td>
+                    <td>{l.poids || ''}</td>
+                    <td style={{ textAlign: 'right' }}>{qte}</td>
+                    <td style={{ textAlign: 'right' }}>{prix.toLocaleString('fr-MA')}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                      {total.toLocaleString('fr-MA')}
+                    </td>
                   </tr>
                 );
               })}
@@ -166,11 +193,13 @@ export default function DetailFacture() {
           <div className="total-section">
             <div>
               <div className="total-label">MONTANT TOTAL TTC</div>
-              {facture.primeChauffeur > 0 && (
-                <div className="prime-row">Prime chauffeur: {formatMAD(facture.primeChauffeur)}</div>
+              {Number(facture.prime_chauffeur) > 0 && (
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                  Prime chauffeur: {formatMAD(facture.prime_chauffeur)}
+                </div>
               )}
             </div>
-            <div className="total-amount">{formatMAD(facture.montantTotal)}</div>
+            <div className="total-amount">{formatMAD(facture.montant_total)}</div>
           </div>
 
           {facture.notes && (
@@ -179,11 +208,14 @@ export default function DetailFacture() {
             </div>
           )}
 
-          {/* Footer */}
+          {/* Pied de page */}
           <div className="footer">
             <p>Trans Commerce TAHA sarl · F.C: 96931 · Patente: 27951651 · I.F: 3307915 · CNSS: 9541279</p>
-            <p style={{ marginTop: '4px' }}>Res.Rif 2, Imm. A7, Appt. 2 – Témara · Tél: 06.61.31.69.57</p>
+            <p style={{ marginTop: '4px' }}>
+              Res.Rif 2, Imm. A7, Appt. 2 – Témara · Tél: 06.61.31.69.57
+            </p>
           </div>
+
         </div>
       </div>
     </div>
