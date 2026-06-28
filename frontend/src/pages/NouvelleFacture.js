@@ -127,7 +127,7 @@ export default function NouvelleFacture() {
 
   const handleChauffeurChange = (chaufId) => {
     setField('chauffeur', chaufId);
-    const chauf = employes.find(e => e._id === chaufId);
+    const chauf = employes.find(e => String(e.id) === String(chaufId));
     if (chauf?.matriculeCamion) setField('matriculeCamion', chauf.matriculeCamion);
   };
 
@@ -206,11 +206,11 @@ export default function NouvelleFacture() {
                 <div className="form-group">
                   <label className="form-label">Sélectionner un client *</label>
                   <select className="form-control" value={form.client} onChange={e => setField('client', e.target.value)}>
-                    <option value="">-- Choisir un client --</option>
-                    {clients.map(c => (
-                      <option key={c._id} value={c._id}>{c.nom} — {c.ville}</option>
+                   <option value="">-- Choisir un client --</option>
+                     {clients.map(c => (
+                   <option key={c.id} value={c.id}>{c.nom} — {c.ville}</option>
                     ))}
-                  </select>
+                 </select>
                 </div>
               )}
             </div>
@@ -225,7 +225,7 @@ export default function NouvelleFacture() {
                 <select className="form-control" value={form.chauffeur} onChange={e => handleChauffeurChange(e.target.value)}>
                   <option value="">-- Choisir --</option>
                   {employes.map(e => (
-                    <option key={e._id} value={e._id}>{e.prenom} {e.nom} {e.matriculeCamion ? `(${e.matriculeCamion})` : ''}</option>
+                  <option key={e.id} value={e.id}>{e.prenom} {e.nom} {e.matriculeCamion ? `(${e.matriculeCamion})` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -302,7 +302,7 @@ export default function NouvelleFacture() {
                         <select className="form-control" value={ligne.produit} onChange={e => updateLigne(idx, 'produit', e.target.value)}>
                           <option value="">-- Choisir un produit --</option>
                           {produits.map(p => (
-                            <option key={p._id} value={p._id}>
+                           <option key={p.id} value={p.id}>
                               {p.societe === 'TRIA GROUP' ? '🌾' : '🌸'} {p.nom} {p.poids} {p.typeSac} — {p.pointChargement || 'Casablanca'}
                             </option>
                           ))}
