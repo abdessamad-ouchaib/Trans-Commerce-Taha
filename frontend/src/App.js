@@ -4,7 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Login from './pages/Login';
 import Layout from './components/Layout';
+import LayoutChauffeur from './components/LayoutChauffeur';
 import Dashboard from './pages/Dashboard';
+import DashboardChauffeur from './pages/DashboardChauffeur';
 import Factures from './pages/Factures';
 import NouvelleFacture from './pages/NouvelleFacture';
 import DetailFacture from './pages/DetailFacture';
@@ -13,9 +15,20 @@ import Produits from './pages/Produits';
 import Employes from './pages/Employes';
 import Chat from './pages/Chat';
 
-const PrivateRoute = ({ children }) => {
+// Route réservée au responsable
+const ResponsableRoute = ({ children }) => {
   const { user } = useAuth();
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'responsable') return <Navigate to="/chauffeur" replace />;
+  return children;
+};
+
+// Route réservée aux chauffeurs
+const ChauffeurRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'responsable') return <Navigate to="/" replace />;
+  return children;
 };
 
 export default function App() {
@@ -25,7 +38,11 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+
+            {/* ── RESPONSABLE UNIQUEMENT ── */}
+            <Route path="/" element={
+              <ResponsableRoute><Layout /></ResponsableRoute>
+            }>
               <Route index element={<Dashboard />} />
               <Route path="factures" element={<Factures />} />
               <Route path="factures/nouvelle" element={<NouvelleFacture />} />
@@ -37,6 +54,16 @@ export default function App() {
               <Route path="chat" element={<Chat />} />
               <Route path="chat/:contactId/:contactType" element={<Chat />} />
             </Route>
+
+            {/* ── CHAUFFEUR UNIQUEMENT ── */}
+            <Route path="/chauffeur" element={
+              <ChauffeurRoute><LayoutChauffeur /></ChauffeurRoute>
+            }>
+              <Route index element={<DashboardChauffeur />} />
+              <Route path="messages" element={<Chat />} />
+              <Route path="messages/:contactId/:contactType" element={<Chat />} />
+            </Route>
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
