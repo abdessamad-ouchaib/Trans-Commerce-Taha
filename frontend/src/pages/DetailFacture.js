@@ -22,8 +22,7 @@ export default function DetailFacture() {
     const { data } = await API.put(`/factures/${id}`, { statut });
     setFacture(f => ({ ...f, statut: data.statut }));
   };
-
-  const handleEnvoyerChauffeur = async () => {
+const handleEnvoyerChauffeur = async () => {
   if (!facture.chauffeur_id) return alert('Aucun chauffeur assigné.');
   try {
     const msg = `📄 *Facture ${facture.numero_facture}*\n` +
@@ -44,6 +43,16 @@ export default function DetailFacture() {
     alert('Erreur lors de l\'envoi.');
   }
 };
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await API.delete(`/factures/${id}`);
+      navigate('/factures');
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+    }
+  };
 
   const formatMAD = (n) => `${Number(n || 0).toLocaleString('fr-MA')} MAD`;
 
