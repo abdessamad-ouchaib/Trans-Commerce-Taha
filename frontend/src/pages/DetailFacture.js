@@ -258,9 +258,14 @@ export default function DetailFacture() {
             🖨️ Imprimer
           </button>
           <button className="btn-primary" style={{ background: '#16a34a' }}
-            onClick={handleDownloadPDF}>
-            📥 PDF
+             onClick={handleDownloadPDF}>
+             📥 PDF
           </button>
+           <button className="btn-primary" style={{ background: '#7c3aed' }}
+            onClick={handleEnvoyerChauffeur}>
+           📤 Envoyer au chauffeur
+            </button>
+         <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
           <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
             🗑️ Supprimer
           </button>
