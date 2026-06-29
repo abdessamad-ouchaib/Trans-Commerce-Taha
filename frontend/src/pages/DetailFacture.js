@@ -22,27 +22,7 @@ export default function DetailFacture() {
     const { data } = await API.put(`/factures/${id}`, { statut });
     setFacture(f => ({ ...f, statut: data.statut }));
   };
-const handleEnvoyerChauffeur = async () => {
-  if (!facture.chauffeur_id) return alert('Aucun chauffeur assigné.');
-  try {
-    const msg = `📄 *Facture ${facture.numero_facture}*\n` +
-      `👥 Client: ${facture.nom_client} — ${facture.ville_client}\n` +
-      `📦 Produits: ${(facture.lignes || []).map(l =>
-        `${l.nom_produit} x${l.quantite_sacs} sacs`).join(', ')}\n` +
-      `💰 Montant: ${Number(facture.montant_total || 0).toLocaleString('fr-MA')} MAD\n` +
-      `🚛 Matricule: ${facture.matricule_camion || '—'}\n` +
-      `💳 Paiement: ${facture.mode_paiement}\n` +
-      `📅 Date: ${formatDate(facture.date_facture)}`;
-    await API.post('/messages', {
-      destinataire_id:   facture.chauffeur_id,
-      destinataire_type: 'chauffeur',
-      contenu: msg
-    });
-    alert(`✅ Facture envoyée à ${facture.nom_chauffeur} !`);
-  } catch (err) {
-    alert('Erreur lors de l\'envoi.');
-  }
-};
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -278,14 +258,10 @@ const handleEnvoyerChauffeur = async () => {
             🖨️ Imprimer
           </button>
           <button className="btn-primary" style={{ background: '#16a34a' }}
-             onClick={handleDownloadPDF}>
+               onClick={handleDownloadPDF}>
              📥 PDF
-          </button>
-           <button className="btn-primary" style={{ background: '#7c3aed' }}
-            onClick={handleEnvoyerChauffeur}>
-           📤 Envoyer au chauffeur
             </button>
-         <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
+              <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
           <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
             🗑️ Supprimer
           </button>
