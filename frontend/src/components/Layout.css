@@ -383,3 +383,49 @@ tr:hover td { background: var(--gray-50); }
   border-bottom: 1px solid rgba(255,255,255,0.1);
   gap: 8px;
 }
+/* Toast notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  background: var(--navy);
+  color: white;
+  padding: 14px 18px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  animation: slideInRight 0.3s ease, fadeOut 0.5s ease 3.5s forwards;
+  max-width: 320px;
+}
+
+.toast-icon { font-size: 24px; flex-shrink: 0; }
+
+.toast-content strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.toast-content p {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; pointer-events: none; }
+}
