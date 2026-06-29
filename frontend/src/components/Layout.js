@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -6,7 +6,7 @@ import './Layout.css';
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { nonLus, connected } = useSocket();
+  const { nonLus, connected, newMessageAlert } = useSocket();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -25,6 +25,17 @@ export default function Layout() {
     <div className="layout">
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
+      {/* Toast notification nouveau message */}
+      {newMessageAlert && (
+        <div className="toast-notification" onClick={() => navigate('/chat')}>
+          <span className="toast-icon">💬</span>
+          <div className="toast-content">
+            <strong>{newMessageAlert.from}</strong>
+            <p>{newMessageAlert.text}</p>
+          </div>
+        </div>
+      )}
+
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-header">
           <div className="logo">
@@ -34,18 +45,15 @@ export default function Layout() {
               <span className="logo-sub">TAHA</span>
             </div>
           </div>
-          <div className={`ws-dot ${connected ? 'ws-on' : 'ws-off'}`} title={connected ? 'Connecté' : 'Déconnecté'} />
+          <div className={`ws-dot ${connected ? 'ws-on' : 'ws-off'}`}
+            title={connected ? 'Connecté' : 'Déconnecté'} />
         </div>
 
         <nav className="sidebar-nav">
           {navItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.exact}
+            <NavLink key={item.to} to={item.to} end={item.exact}
               className={({ isActive }) => `nav-item ${isActive ? 'nav-active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-            >
+              onClick={() => setSidebarOpen(false)}>
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
               {item.badge && <span className="nav-badge">{item.badge}</span>}
@@ -70,14 +78,13 @@ export default function Layout() {
           <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div className="topbar-title">Trans Commerce Taha</div>
           <div className="topbar-actions">
-            <button className="btn-primary btn-sm" onClick={() => navigate('/factures/nouvelle')}>
+            <button className="btn-primary btn-sm"
+              onClick={() => navigate('/factures/nouvelle')}>
               + Nouvelle facture
             </button>
           </div>
         </header>
-        <main className="main-content">
-          <Outlet />
-        </main>
+        <main className="main-content"><Outlet /></main>
       </div>
     </div>
   );
