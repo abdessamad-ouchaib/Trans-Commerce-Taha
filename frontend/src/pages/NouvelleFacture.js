@@ -69,8 +69,8 @@ export default function NouvelleFacture() {
           lignes: (data.lignes || []).map(l => ({
             produit:      l.produit_id || '',
             nomProduit:   l.nom_produit || '',
-            quantiteSacs: l.quantite_sacs || 1,
-            prixUnitaire: l.prix_unitaire || 0
+            quantiteSacs: l.quantite_sacs || '',
+            prixUnitaire: l.prix_unitaire || ''
           }))
         });
       });
@@ -79,13 +79,20 @@ export default function NouvelleFacture() {
 
   const setField = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
+  // Ajouter une ligne produit vide
   const addLigne = () => {
     setForm(f => ({
       ...f,
-      lignes: [...f.lignes, { produit: '', nomProduit: '', quantiteSacs: 1, prixUnitaire: 0 }]
+      lignes: [...f.lignes, {
+        produit: '',
+        nomProduit: '',
+        quantiteSacs: '',
+        prixUnitaire: ''
+      }]
     }));
   };
 
+  // Mettre à jour une ligne
   const updateLigne = (idx, key, value) => {
     setForm(f => ({
       ...f,
@@ -96,7 +103,7 @@ export default function NouvelleFacture() {
           const p = produits.find(p => String(p.id) === String(value));
           if (p) {
             updated.nomProduit   = `${p.nom} ${p.poids} ${p.type_sac}`;
-            updated.prixUnitaire = p.prix_unitaire || 0;
+            updated.prixUnitaire = ''; // Le responsable saisit le prix manuellement
           }
         }
         return updated;
@@ -131,13 +138,11 @@ export default function NouvelleFacture() {
     try {
       let clientId = form.client;
 
-      // Créer nouveau client si besoin
       if (nouvelleClientMode) {
         const { data: newClient } = await API.post('/clients', nouveauClient);
         clientId = newClient.id;
       }
 
-      // Construire le payload PostgreSQL
       const payload = {
         client_id:        clientId,
         chauffeur_id:     form.chauffeur,
@@ -406,8 +411,12 @@ export default function NouvelleFacture() {
                           type="number"
                           className="form-control"
                           value={ligne.quantiteSacs}
-                          onChange={e => updateLigne(idx, 'quantiteSacs', Number(e.target.value))}
+                          onChange={e => {
+                            const val = parseInt(e.target.value, 10);
+                            updateLigne(idx, 'quantiteSacs', isNaN(val) ? '' : val);
+                          }}
                           min="1"
+                          placeholder="Ex: 500"
                         />
                       </div>
                       <div className="form-group">
@@ -416,9 +425,13 @@ export default function NouvelleFacture() {
                           type="number"
                           className="form-control"
                           value={ligne.prixUnitaire}
-                          onChange={e => updateLigne(idx, 'prixUnitaire', Number(e.target.value))}
+                          onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            updateLigne(idx, 'prixUnitaire', isNaN(val) ? '' : val);
+                          }}
                           min="0"
-                          step="0.01"
+                          step="0.25"
+                          placeholder="Ex: 85.00"
                         />
                       </div>
                     </div>
