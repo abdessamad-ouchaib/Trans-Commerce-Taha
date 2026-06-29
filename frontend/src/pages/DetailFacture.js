@@ -261,7 +261,7 @@ export default function DetailFacture() {
                onClick={handleDownloadPDF}>
              📥 PDF
             </button>
-              <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
+              
           <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
             🗑️ Supprimer
           </button>
