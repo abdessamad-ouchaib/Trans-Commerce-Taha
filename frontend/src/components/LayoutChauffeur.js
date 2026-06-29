@@ -6,7 +6,7 @@ import './Layout.css';
 
 export default function LayoutChauffeur() {
   const { user, logout } = useAuth();
-  const { nonLus, connected } = useSocket();
+  const { nonLus, connected, newMessageAlert } = useSocket();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -15,6 +15,18 @@ export default function LayoutChauffeur() {
   return (
     <div className="layout">
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Toast notification nouveau message */}
+      {newMessageAlert && (
+        <div className="toast-notification"
+          onClick={() => navigate('/chauffeur/messages')}>
+          <span className="toast-icon">💬</span>
+          <div className="toast-content">
+            <strong>{newMessageAlert.from}</strong>
+            <p>{newMessageAlert.text}</p>
+          </div>
+        </div>
+      )}
 
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-header">
@@ -35,7 +47,6 @@ export default function LayoutChauffeur() {
             <span className="nav-icon">🏠</span>
             <span className="nav-label">Mon espace</span>
           </NavLink>
-
           <NavLink to="/chauffeur/messages"
             className={({ isActive }) => `nav-item ${isActive ? 'nav-active' : ''}`}
             onClick={() => setSidebarOpen(false)}>
