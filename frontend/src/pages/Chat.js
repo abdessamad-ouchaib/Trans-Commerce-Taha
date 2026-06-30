@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -12,75 +12,110 @@ export default function Chat() {
   const { contactId, contactType } = useParams();
   const navigate = useNavigate();
 
-  const [employes, setEmployes] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [input, setInput] = useState('');
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showFactureModal, setShowFactureModal] = useState(false);
+  const [factures, setFactures] = useState([]);
   const messagesEndRef = useRef(null);
   const typingTimer = useRef(null);
 
   const moi_id   = user?.id;
   const moi_type = user?.role || 'responsable';
-  const moi_nom  = `${user?.prenom || ''} ${user?.nom || ''}`.trim();
+  const isResponsable = moi_type === 'responsable';
 
-  // Conv key for current contact
   const convKey = selectedContact
     ? `${selectedContact.id}_${selectedContact.type}`
     : null;
 
   const currentMessages = convKey ? (messages[convKey] || []) : [];
 
-  // Load contacts (employes)
+  // ── Charger les contacts ────────────────────────────────────────────────
   useEffect(() => {
-    API.get('/employes').then(({ data }) => {
-      // Build contact list — exclude self if employee
-      const contacts = data.map(e => ({
-        id: e.id,
-        type: e.role || 'chauffeur',
-        nom: `${e.prenom} ${e.nom}`,
-        role: e.role,
-        matricule: e.matricule_camion
-      }));
+    const loadContacts = async () => {
+      try {
+        if (isResponsable) {
+          // Responsable voit tous les employés
+          const { data } = await API.get('/employes');
+          const list = data.map(e => ({
+            id: e.id,
+            type: e.role || 'chauffeur',
+            nom: `${e.prenom} ${e.nom}`,
+            role: e.role,
+            matricule: e.matricule_camion
+          }));
+          setContacts(list);
+        } else {
+          // Chauffeur voit seulement le responsable
+          setContacts([{
+            id: 1,
+            type: 'responsable',
+            nom: 'Abdelaali Ouchaib',
+            role: 'responsable',
+            matricule: null
+          }]);
+        }
 
-      // Add "Responsable" as contact if current user is not responsable
-      if (moi_type !== 'responsable') {
-        contacts.unshift({
-          id: 1, // responsable always id=1 from seed
-          type: 'responsable',
-          nom: 'Abdelaali Ouchaib',
-          role: 'responsable',
-          matricule: null
-        });
+        // Auto-sélection depuis l'URL
+        if (contactId && contactType) {
+          if (isResponsable) {
+            const { data } = await API.get('/employes');
+            const found = data.find(e =>
+              String(e.id) === contactId
+            );
+            if (found) {
+              setSelectedContact({
+                id: found.id,
+                type: found.role || 'chauffeur',
+                nom: `${found.prenom} ${found.nom}`,
+                role: found.role,
+                matricule: found.matricule_camion
+              });
+            }
+          } else {
+            setSelectedContact({
+              id: 1, type: 'responsable',
+              nom: 'Abdelaali Ouchaib', role: 'responsable'
+            });
+          }
+        } else if (!isResponsable) {
+          // Auto-sélectionner le responsable pour les chauffeurs
+          setSelectedContact({
+            id: 1, type: 'responsable',
+            nom: 'Abdelaali Ouchaib', role: 'responsable'
+          });
+        }
+      } catch (err) {
+        console.error(err);
       }
+    };
+    loadContacts();
+  }, [contactId, contactType, isResponsable]);
 
-      setEmployes(contacts);
+  // ── Charger les factures (pour le responsable) ──────────────────────────
+  useEffect(() => {
+    if (isResponsable) {
+      API.get('/factures?limit=50').then(({ data }) => {
+        setFactures(data.factures || []);
+      });
+    }
+  }, [isResponsable]);
 
-      // Auto-select from URL param
-      if (contactId && contactType) {
-        const found = contacts.find(c => String(c.id) === contactId && c.type === contactType);
-        if (found) setSelectedContact(found);
-      }
-    });
-  }, [contactId, contactType, moi_type]);
-
-  // Load message history when contact changes
+  // ── Charger historique de la conversation sélectionnée ───────────────────
   useEffect(() => {
     if (!selectedContact) return;
     setLoadingHistory(true);
     clearNonLus();
     API.get(`/messages?avec_id=${selectedContact.id}&avec_type=${selectedContact.type}&limit=100`)
-      .then(({ data }) => {
-        loadHistory(data, convKey);
-      })
+      .then(({ data }) => { loadHistory(data, convKey); })
       .finally(() => setLoadingHistory(false));
   }, [selectedContact]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages]);
 
-  // Handle send
   const handleSend = () => {
     if (!input.trim() || !selectedContact) return;
     sendMessage(selectedContact.id, selectedContact.type, input.trim());
@@ -105,6 +140,22 @@ export default function Chat() {
     }, 2000);
   };
 
+  const handleSendFacture = (facture) => {
+    if (!selectedContact) return;
+    const msg =
+      `📄 *Facture ${facture.numero_facture}*\n` +
+      `👥 Client: ${facture.nom_client} — ${facture.ville_client}\n` +
+      `💰 Montant: ${Number(facture.montant_total || 0).toLocaleString('fr-MA')} MAD\n` +
+      `🚛 Matricule: ${facture.matricule_camion || '—'}\n` +
+      `💳 Paiement: ${facture.mode_paiement}\n` +
+      `📅 Date livraison: ${facture.date_facture
+        ? new Date(facture.date_facture).toLocaleDateString('fr-MA')
+        : '—'}\n` +
+      `🔗 Voir: ${window.location.origin}/factures/${facture.id}`;
+    sendMessage(selectedContact.id, selectedContact.type, msg);
+    setShowFactureModal(false);
+  };
+
   const formatTime = (ts) => {
     const d = new Date(ts);
     return d.toLocaleTimeString('fr-MA', { hour: '2-digit', minute: '2-digit' });
@@ -120,7 +171,6 @@ export default function Chat() {
     return d.toLocaleDateString('fr-MA', { day: 'numeric', month: 'long' });
   };
 
-  // Group messages by date
   const grouped = [];
   let lastDate = null;
   for (const msg of currentMessages) {
@@ -133,31 +183,75 @@ export default function Chat() {
   }
 
   const isTyping = selectedContact && typing[convKey];
-
   const roleIcon = (r) => ({ chauffeur: '🚛', responsable: '👔', autre: '👤' }[r] || '👤');
 
   return (
-    <div className={`chat-page ${selectedContact ? "contact-open" : ""}`}>
-      {/* LEFT — Contacts */}
+    <div className={`chat-page ${selectedContact ? 'contact-open' : ''}`}>
+
+      {/* ── Modal Envoyer Facture ── */}
+      {showFactureModal && (
+        <div className="modal-overlay" onClick={() => setShowFactureModal(false)}>
+          <div className="modal-card modal-large" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="card-title">📄 Envoyer une facture</h2>
+              <button className="btn-delete" onClick={() => setShowFactureModal(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {factures.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#64748b', padding: 20 }}>
+                  Aucune facture disponible.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {factures.map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => handleSendFacture(f)}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 8,
+                        background: 'white', cursor: 'pointer', textAlign: 'left'
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: '#1a3a5c' }}>{f.numero_facture}</strong>
+                        <p style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                          {f.nom_client} — {f.ville_client}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <strong>{Number(f.montant_total).toLocaleString('fr-MA')} MAD</strong>
+                        <p style={{ fontSize: 11 }}>
+                          <span className={`badge ${f.statut === 'Payée' ? 'badge-green' : 'badge-orange'}`}>
+                            {f.statut}
+                          </span>
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LEFT — Contacts ── */}
       <div className="chat-sidebar">
         <div className="chat-sidebar-header">
           <h2 className="chat-title">💬 Messages</h2>
         </div>
-
         <div className="contacts-list">
-          {employes.length === 0 && (
+          {contacts.length === 0 && (
             <div className="contacts-empty">
-              <p>Aucun employé.</p>
-              <button className="btn-primary btn-sm" onClick={() => navigate('/employes')}>
-                Ajouter un employé
-              </button>
+              <p>Aucun contact.</p>
             </div>
           )}
-          {employes.map(contact => {
+          {contacts.map(contact => {
             const key = `${contact.id}_${contact.type}`;
             const online = isOnline(contact.id, contact.type);
             const unreadMsgs = (messages[key] || []).filter(
-              m => m.expediteur_id !== moi_id && !m.lu
+              m => String(m.expediteur_id) !== String(moi_id) && !m.lu
             ).length;
             const lastMsg = (messages[key] || []).slice(-1)[0];
             const isSelected = selectedContact?.id === contact.id && selectedContact?.type === contact.type;
@@ -168,7 +262,8 @@ export default function Chat() {
                 className={`contact-item ${isSelected ? 'contact-selected' : ''}`}
                 onClick={() => {
                   setSelectedContact(contact);
-                  navigate(`/chat/${contact.id}/${contact.type}`);
+                  const base = isResponsable ? '/chat' : '/chauffeur/messages';
+                  navigate(`${base}/${contact.id}/${contact.type}`);
                 }}
               >
                 <div className="contact-avatar-wrap">
@@ -182,20 +277,16 @@ export default function Chat() {
                     <span className="contact-nom">
                       {roleIcon(contact.role)} {contact.nom}
                     </span>
-                    {lastMsg && (
-                      <span className="contact-time">{formatTime(lastMsg.created_at)}</span>
-                    )}
+                    {lastMsg && <span className="contact-time">{formatTime(lastMsg.created_at)}</span>}
                   </div>
                   <div className="contact-row">
                     <span className="contact-preview">
                       {lastMsg
-                        ? (lastMsg.expediteur_id === moi_id ? 'Vous: ' : '') + lastMsg.contenu.slice(0, 35) + (lastMsg.contenu.length > 35 ? '...' : '')
-                        : contact.matricule ? `🚛 ${contact.matricule}` : online ? 'En ligne' : 'Hors ligne'
-                      }
+                        ? (String(lastMsg.expediteur_id) === String(moi_id) ? 'Vous: ' : '') +
+                          lastMsg.contenu.slice(0, 35) + (lastMsg.contenu.length > 35 ? '...' : '')
+                        : contact.matricule ? `🚛 ${contact.matricule}` : online ? 'En ligne' : 'Hors ligne'}
                     </span>
-                    {unreadMsgs > 0 && (
-                      <span className="unread-badge">{unreadMsgs}</span>
-                    )}
+                    {unreadMsgs > 0 && <span className="unread-badge">{unreadMsgs}</span>}
                   </div>
                 </div>
               </button>
@@ -204,23 +295,22 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* RIGHT — Conversation */}
+      {/* ── RIGHT — Conversation ── */}
       <div className="chat-main">
         {!selectedContact ? (
           <div className="chat-placeholder">
             <div className="placeholder-icon">💬</div>
             <h3>Sélectionnez un contact</h3>
-            <p>Choisissez un employé ou chauffeur pour commencer à discuter</p>
+            <p>Choisissez un employé pour commencer à discuter</p>
           </div>
         ) : (
           <>
-            {/* Header */}
             <div className="chat-header">
               <button className="btn-back-mobile" onClick={() => setSelectedContact(null)}>←</button>
               <div className="chat-contact-avatar">
                 {selectedContact.nom.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
               </div>
-              <div className="chat-contact-info">
+              <div className="chat-contact-info" style={{ flex: 1 }}>
                 <span className="chat-contact-nom">
                   {roleIcon(selectedContact.role)} {selectedContact.nom}
                 </span>
@@ -229,13 +319,19 @@ export default function Chat() {
                   {selectedContact.matricule && ` · 🚛 ${selectedContact.matricule}`}
                 </span>
               </div>
+              {isResponsable && (
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => setShowFactureModal(true)}
+                  style={{ flexShrink: 0 }}
+                >
+                  📄 Envoyer facture
+                </button>
+              )}
             </div>
 
-            {/* Messages */}
             <div className="messages-area">
-              {loadingHistory && (
-                <div className="loading-msgs">Chargement des messages...</div>
-              )}
+              {loadingHistory && <div className="loading-msgs">Chargement des messages...</div>}
 
               {grouped.map((item, i) => {
                 if (item.type === 'date') {
@@ -245,11 +341,9 @@ export default function Chat() {
                     </div>
                   );
                 }
-
                 const msg = item.msg;
                 const isMine = String(msg.expediteur_id) === String(moi_id) &&
                                msg.expediteur_type === moi_type;
-
                 return (
                   <div key={msg.id} className={`message-wrap ${isMine ? 'msg-mine' : 'msg-theirs'}`}>
                     {!isMine && (
@@ -258,9 +352,7 @@ export default function Chat() {
                       </div>
                     )}
                     <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-theirs'}`}>
-                      {!isMine && (
-                        <span className="bubble-sender">{msg.expediteur_nom}</span>
-                      )}
+                      {!isMine && <span className="bubble-sender">{msg.expediteur_nom}</span>}
                       <p className="bubble-text">{msg.contenu}</p>
                       <span className="bubble-time">
                         {formatTime(msg.created_at)}
@@ -271,16 +363,13 @@ export default function Chat() {
                 );
               })}
 
-              {/* Typing indicator */}
               {isTyping && (
                 <div className="message-wrap msg-theirs">
                   <div className="msg-sender-avatar">
                     {selectedContact.nom.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
                   </div>
                   <div className="message-bubble bubble-theirs typing-bubble">
-                    <span className="typing-dots">
-                      <span /><span /><span />
-                    </span>
+                    <span className="typing-dots"><span /><span /><span /></span>
                   </div>
                 </div>
               )}
@@ -288,7 +377,6 @@ export default function Chat() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
             <div className="chat-input-area">
               <textarea
                 className="chat-input"
