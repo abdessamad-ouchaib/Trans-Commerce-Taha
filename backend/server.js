@@ -1,10 +1,10 @@
 require('dotenv').config();
-const express   = require('express');
-const http      = require('http');
+const express    = require('express');
+const http       = require('http');
 const { Server } = require('socket.io');
-const cors      = require('cors');
-const jwt       = require('jsonwebtoken');
-const db        = require('./db');
+const cors       = require('cors');
+const jwt        = require('jsonwebtoken');
+const db         = require('./db');
 
 const app    = express();
 const server = http.createServer(app);
@@ -14,13 +14,14 @@ const io = new Server(server, {
     origin: process.env.FRONTEND_URL || '*',
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
 app.use(express.json());
 
-// REST routes
 app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/employes', require('./routes/employes'));
 app.use('/api/produits', require('./routes/produits'));
@@ -28,11 +29,18 @@ app.use('/api/clients',  require('./routes/clients'));
 app.use('/api/factures', require('./routes/factures'));
 app.use('/api/messages', require('./routes/messages'));
 
-app.get('/', (req, res) => res.json({ message: '🚛 Trans Commerce TAHA API — PostgreSQL + WebSocket' }));
+app.get('/', (req, res) =>
+  res.json({ message: '🚛 Trans Commerce TAHA API v2' })
+);
 
-// ─── Socket.io — Chat en temps réel ─────────────────────────────────────────
-// Map: userId_type → socket.id
-const connected = new Map();
+// ── Keep-alive pour Render Free (évite la mise en veille) ────────────────────
+setInterval(() => {
+  console.log('💓 Keep-alive ping:', new Date().toISOString());
+}, 10 * 60 * 1000); // toutes les 10 minutes
+
+// ─── Socket.io ────────────────────────────────────────────────────────────────
+// Map: userId_role → Set de socket.id (un user peut avoir plusieurs onglets)
+const connected = new Map(); // "userId_role" → Set([socketId1, socketId2])
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -47,11 +55,16 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   const { id, role, nom, prenom } = socket.user;
-  const key = `${id}_${role}`;
-  connected.set(key, socket.id);
-  console.log(`✅ Connecté: ${prenom} ${nom} (${role}) — socket: ${socket.id}`);
+  const userRole = role || 'chauffeur';
+  const myKey    = `${id}_${userRole}`;
 
-  // Broadcast online users list
+  // Ajouter ce socket à la map (supporte plusieurs onglets)
+  if (!connected.has(myKey)) connected.set(myKey, new Set());
+  connected.get(myKey).add(socket.id);
+
+  console.log(`✅ [${new Date().toLocaleTimeString()}] Connecté: ${prenom} ${nom} (${userRole}) | key=${myKey} | socket=${socket.id}`);
+
+  // Diffuser liste en ligne
   io.emit('users_online', Array.from(connected.keys()));
 
   // ── Envoyer un message ──────────────────────────────────────────────────
@@ -62,64 +75,80 @@ io.on('connection', (socket) => {
     const exp_nom = `${prenom || ''} ${nom || ''}`.trim();
 
     try {
-      // Save to PostgreSQL
+      // Sauvegarder en DB
       const { rows } = await db.query(`
         INSERT INTO messages
           (expediteur_id, expediteur_type, expediteur_nom,
            destinataire_id, destinataire_type, contenu)
         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *
-      `, [id, role, exp_nom,
-          destinataire_id || null, destinataire_type || null,
-          contenu.trim()]);
+      `, [
+        id, userRole, exp_nom,
+        destinataire_id || null,
+        destinataire_type || null,
+        contenu.trim()
+      ]);
 
       const msg = rows[0];
+      console.log(`📨 [${new Date().toLocaleTimeString()}] ${myKey} → ${destinataire_id}_${destinataire_type}: "${contenu.slice(0,30)}"`);
 
-      // Send to sender (confirmation)
+      // 1. Confirmer à l'expéditeur
       socket.emit('nouveau_message', msg);
 
-      // Send to recipient if online
+      // 2. Envoyer à TOUS les sockets du destinataire
       if (destinataire_id && destinataire_type) {
-        const destKey = `${destinataire_id}_${destinataire_type}`;
-        const destSocketId = connected.get(destKey);
-        if (destSocketId) {
-          io.to(destSocketId).emit('nouveau_message', msg);
+        const destKey     = `${destinataire_id}_${destinataire_type}`;
+        const destSockets = connected.get(destKey);
+
+        if (destSockets && destSockets.size > 0) {
+          destSockets.forEach(socketId => {
+            io.to(socketId).emit('nouveau_message', msg);
+          });
+          console.log(`   ✅ Livré à ${destKey} (${destSockets.size} socket(s))`);
+        } else {
+          console.log(`   💾 ${destKey} hors ligne — message en DB`);
         }
-      } else {
-        // Broadcast to everyone (group message)
-        socket.broadcast.emit('nouveau_message', msg);
       }
+
     } catch (err) {
-      console.error('Erreur message:', err.message);
+      console.error('❌ Erreur message:', err.message);
       socket.emit('erreur', { message: 'Erreur envoi message.' });
     }
   });
 
-  // ── Typing indicator ───────────────────────────────────────────────────
+  // ── Typing ────────────────────────────────────────────────────────────────
   socket.on('en_train_decrire', ({ destinataire_id, destinataire_type }) => {
-    const destKey = `${destinataire_id}_${destinataire_type}`;
-    const destSocketId = connected.get(destKey);
-    if (destSocketId) {
-      io.to(destSocketId).emit('utilisateur_ecrit', {
-        id, role, nom: `${prenom} ${nom}`
+    const destKey     = `${destinataire_id}_${destinataire_type}`;
+    const destSockets = connected.get(destKey);
+    if (destSockets) {
+      destSockets.forEach(sid => {
+        io.to(sid).emit('utilisateur_ecrit', { id, role: userRole, nom: `${prenom} ${nom}` });
       });
     }
   });
 
   socket.on('arret_decrire', ({ destinataire_id, destinataire_type }) => {
-    const destKey = `${destinataire_id}_${destinataire_type}`;
-    const destSocketId = connected.get(destKey);
-    if (destSocketId) {
-      io.to(destSocketId).emit('arret_ecriture', { id, role });
+    const destKey     = `${destinataire_id}_${destinataire_type}`;
+    const destSockets = connected.get(destKey);
+    if (destSockets) {
+      destSockets.forEach(sid => {
+        io.to(sid).emit('arret_ecriture', { id, role: userRole });
+      });
     }
   });
 
-  // ── Disconnect ─────────────────────────────────────────────────────────
-  socket.on('disconnect', () => {
-    connected.delete(key);
+  // ── Déconnexion ───────────────────────────────────────────────────────────
+  socket.on('disconnect', (reason) => {
+    const sockets = connected.get(myKey);
+    if (sockets) {
+      sockets.delete(socket.id);
+      if (sockets.size === 0) connected.delete(myKey);
+    }
     io.emit('users_online', Array.from(connected.keys()));
-    console.log(`❌ Déconnecté: ${prenom} ${nom}`);
+    console.log(`❌ [${new Date().toLocaleTimeString()}] Déconnecté: ${prenom} ${nom} | reason=${reason}`);
   });
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`✅ Serveur + WebSocket démarré sur le port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`✅ Serveur démarré sur le port ${PORT}`)
+);
