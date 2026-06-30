@@ -47,15 +47,28 @@ export default function Chat() {
           }));
           setContacts(list);
         } else {
-          // Chauffeur voit seulement le responsable
-          setContacts([{
-            id: 1,
-            type: 'responsable',
-            nom: 'Abdelaali Ouchaib',
-            role: 'responsable',
-            matricule: null
-          }]);
-        }
+  // Chauffeur — récupérer le vrai ID du responsable
+            try {
+               const { data: resp } = await API.get('/auth/responsable-info');
+               const contact = {
+                  id:       resp.id,
+                  type:     'responsable',
+                   nom:      `${resp.prenom} ${resp.nom}`,
+                   role:     'responsable',
+                   matricule: null
+    };
+           setContacts([contact]);
+    // Auto-sélectionner le responsable
+               setSelectedContact(contact);
+      } catch {
+             const contact = {
+                id: 1, type: 'responsable',
+              nom: 'Abdelaali Ouchaib', role: 'responsable'
+           };
+               setContacts([contact]);
+             setSelectedContact(contact);
+         }
+      }
 
         // Auto-sélection depuis l'URL
         if (contactId && contactType) {
@@ -79,13 +92,7 @@ export default function Chat() {
               nom: 'Abdelaali Ouchaib', role: 'responsable'
             });
           }
-        } else if (!isResponsable) {
-          // Auto-sélectionner le responsable pour les chauffeurs
-          setSelectedContact({
-            id: 1, type: 'responsable',
-            nom: 'Abdelaali Ouchaib', role: 'responsable'
-          });
-        }
+        
       } catch (err) {
         console.error(err);
       }
