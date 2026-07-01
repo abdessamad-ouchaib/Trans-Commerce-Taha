@@ -8,9 +8,9 @@ import './Chat.css';
 export default function Chat() {
   const { user } = useAuth();
   const {
-    messages, sendMessage, emitTyping, emitStopTyping,
-    loadHistory, clearNonLus, isOnline, typing
-  } = useSocket();
+  messages, sendMessage, emitTyping, emitStopTyping,
+  loadHistory, clearNonLus, isOnline, typing, getConvKey
+} = useSocket();
   const { contactId, contactType } = useParams();
   const navigate = useNavigate();
 
@@ -29,8 +29,8 @@ export default function Chat() {
   const isResponsable = moi_type === 'responsable';
 
   const convKey = selectedContact
-    ? `${selectedContact.id}_${selectedContact.type}`
-    : null;
+  ? getConvKey(selectedContact.id, selectedContact.type)
+  : null;
 
   const currentMessages = convKey ? (messages[convKey] || []) : [];
 
@@ -112,9 +112,9 @@ export default function Chat() {
     setLoadingHistory(true);
     clearNonLus();
     API.get(
-      `/messages?avec_id=${selectedContact.id}&avec_type=${selectedContact.type}&limit=100`
-    )
-      .then(({ data }) => loadHistory(data, convKey))
+  `/messages?avec_id=${selectedContact.id}&avec_type=${selectedContact.type}&limit=100`
+  )
+  .then(({ data }) => loadHistory(data, convKey, selectedContact.id, selectedContact.type))
       .catch(console.error)
       .finally(() => setLoadingHistory(false));
   }, [selectedContact]);
