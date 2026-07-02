@@ -8,7 +8,28 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { nonLus, connected, newMessageAlert } = useSocket();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen,    setSidebarOpen]    = useState(false);
+const [installPrompt,  setInstallPrompt]  = useState(null);
+const [showInstall,    setShowInstall]    = useState(false);
+
+// Capturer l'événement d'installation PWA
+React.useEffect(() => {
+  const handler = (e) => {
+    e.preventDefault();
+    setInstallPrompt(e);
+    setShowInstall(true);
+  };
+  window.addEventListener('beforeinstallprompt', handler);
+  return () => window.removeEventListener('beforeinstallprompt', handler);
+}, []);
+
+const handleInstall = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  if (outcome === 'accepted') setShowInstall(false);
+  setInstallPrompt(null);
+};
 
   const navItems = [
     { to: '/',         icon: '📊', label: 'Tableau de bord', exact: true },
@@ -77,12 +98,21 @@ export default function Layout() {
         <header className="topbar no-print">
           <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div className="topbar-title">Trans Commerce Taha</div>
-          <div className="topbar-actions">
-            <button className="btn-primary btn-sm"
-              onClick={() => navigate('/factures/nouvelle')}>
-              + Nouvelle facture
-            </button>
-          </div>
+          <div className="topbar-actions" style={{ display: 'flex', gap: '8px' }}>
+  {showInstall && (
+    <button
+      className="btn-secondary btn-sm"
+      onClick={handleInstall}
+      title="Installer l'application"
+    >
+      📲 Installer
+    </button>
+  )}
+  <button className="btn-primary btn-sm"
+    onClick={() => navigate('/factures/nouvelle')}>
+    + Nouvelle facture
+  </button>
+</div>
         </header>
         <main className="main-content"><Outlet /></main>
       </div>
